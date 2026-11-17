@@ -108,7 +108,18 @@ void *dramReserve(void)
     /* One shared file descriptor + two MAP_SHARED mmaps = one backing store,
      * two views. Linux can keep it fully anonymous with memfd; Darwin uses a
      * POSIX shared-memory object and unlinks its name immediately. */
-#if defined(PLATFORM_MACOS)
+#if defined(PLATFORM_IOS)
+    extern char *getenv(const char *name);   /* <stdlib.h> is the N64 stub here */
+    /* The iOS sandbox refuses shm_open. An unlinked file in the app's own
+     * temporary folder gives the same shared backing store. */
+    char shmName[1024];
+    const char *tmp = getenv("TMPDIR");
+    snprintf(shmName, sizeof(shmName), "%s/ge007_dram_%ld",
+             (tmp && *tmp) ? tmp : "/tmp", (long)getpid());
+    int fd = open(shmName, O_RDWR | O_CREAT | O_TRUNC, 0600);
+    if (fd >= 0)
+        unlink(shmName);
+#elif defined(PLATFORM_MACOS)
     char shmName[64];
     snprintf(shmName, sizeof(shmName), "/ge007_dram_%ld", (long)getpid());
     int fd = shm_open(shmName, O_RDWR | O_CREAT, 0600);

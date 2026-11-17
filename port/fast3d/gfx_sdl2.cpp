@@ -9,7 +9,7 @@
 #include "gfx_screen_config.h"
 #include "input.h"
 #include "ge007_icon.h"
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(PLATFORM_IOS)
 #include <OpenGL/OpenGL.h>   /* D952: CGL swap interval */
 #endif
 
@@ -31,7 +31,7 @@ static bool vsync_enabled = true;
  * the VSync inside flushBuffer, as SDL2 did on macOS. Must be called with the
  * context current (both callers are: init on the host thread, live config on
  * the render thread). */
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(PLATFORM_IOS)
 static int s_cglSwapInterval = 0;
 static bool gfx_sdl_apply_swap_interval(int interval) {
     SDL_GL_SetSwapInterval(0);
@@ -250,7 +250,12 @@ static void gfx_sdl_init(const struct GfxWindowInitSettings *set) {
     };
 
     u32 verstart = 1;
-    const u32 verend = sizeof(glver) / sizeof(*glver);
+    u32 verend = sizeof(glver) / sizeof(*glver);
+#if defined(PLATFORM_IOS)
+    /* iOS: OpenGL ES 3.0 only (row 4). */
+    verstart = 4;
+    verend = 5;
+#endif
     const char *verstr = sysArgGetString("--gl-version");
     if (verstr && *verstr) {
         // user override
@@ -298,7 +303,7 @@ static void gfx_sdl_init(const struct GfxWindowInitSettings *set) {
     }
 
     SDL_GL_MakeCurrent(wnd, ctx);
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(PLATFORM_IOS)
     gfx_sdl_apply_swap_interval(1);   /* D952 */
 #else
     SDL_GL_SetSwapInterval(1);
@@ -666,7 +671,7 @@ static void gfx_sdl_set_window_title(const char *title) {
 }
 
 static int gfx_sdl_get_swap_interval(void) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(PLATFORM_IOS)
     return s_cglSwapInterval;   /* D952 */
 #else
     return SDL_GL_GetSwapInterval();
@@ -674,7 +679,7 @@ static int gfx_sdl_get_swap_interval(void) {
 }
 
 static bool gfx_sdl_set_swap_interval(int interval) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(PLATFORM_IOS)
     const bool success = gfx_sdl_apply_swap_interval(interval);   /* D952 */
 #else
     const bool success = SDL_GL_SetSwapInterval(interval) >= 0;

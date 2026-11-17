@@ -29,7 +29,10 @@
 #endif
 #endif
 
-#if defined(PLATFORM_MACOS) && defined(PLATFORM_ARM)
+#if defined(PLATFORM_IOS)
+#include <mach/mach.h>
+#include <mach/vm_map.h>
+#elif defined(PLATFORM_MACOS) && defined(PLATFORM_ARM)
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #endif
@@ -174,7 +177,44 @@ void portAddrInit(void)
      * and macOS (0x1_00xxxxxx + slide). */
     g_portUseImageRel = (g_portImageBase >= (uintptr_t)PORT_ADDR_WINDOW) ? 1 : 0;
 
-#if PORT_ADDR_BASE != 0
+#if PORT_ADDR_BASE != 0 && defined(PLATFORM_IOS)
+    {
+        /* iOS has no mach_vm_map in its SDK: allocate the window at its fixed
+         * address (fails with KERN_NO_SPACE rather than replacing a mapping)
+         * and take every permission away, which leaves the same reservation. */
+        vm_address_t addr = (vm_address_t)PORT_ADDR_BASE;
+        kern_return_t kr = vm_allocate(mach_task_self(), &addr,
+                                       (vm_size_t)PORT_ADDR_WINDOW, VM_FLAGS_FIXED);
+        if (kr == KERN_SUCCESS)
+            kr = vm_protect(mach_task_self(), addr, (vm_size_t)PORT_ADDR_WINDOW,
+                            FALSE, VM_PROT_NONE);
+        if (kr != KERN_SUCCESS || addr != (vm_address_t)PORT_ADDR_BASE) {
+            /* Log the address space, to choose a base that is free here. */
+            vm_address_t r = 0;
+            for (int n = 0; n < 400; n++) {
+                vm_size_t rsz = 0;
+                vm_region_basic_info_data_64_t info;
+                mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64;
+                mach_port_t obj = MACH_PORT_NULL;
+                if (vm_region_64(mach_task_self(), &r, &rsz, VM_REGION_BASIC_INFO_64,
+                                 (vm_region_info_t)&info, &cnt, &obj) != KERN_SUCCESS)
+                    break;
+                sysLogPrintf(LOG_NOTE, "portAddr: region 0x%llx-0x%llx prot %d",
+                             (unsigned long long)r, (unsigned long long)(r + rsz),
+                             info.protection);
+                r += rsz;
+            }
+            vm_address_t any = 0;
+            kern_return_t ka = vm_allocate(mach_task_self(), &any,
+                                           (vm_size_t)PORT_ADDR_WINDOW, VM_FLAGS_ANYWHERE);
+            sysLogPrintf(LOG_NOTE, "portAddr: a 4 GiB allocation anywhere: 0x%llx (%s)",
+                         (unsigned long long)any, mach_error_string(ka));
+            sysFatalError("portAddr: cannot reserve the 4 GiB N64 window at "
+                          "0x%llx (%s).", (unsigned long long)PORT_ADDR_BASE,
+                          mach_error_string(kr));
+        }
+    }
+#elif PORT_ADDR_BASE != 0
     {
         /* Non-clobbering: VM_FLAGS_FIXED without VM_FLAGS_OVERWRITE fails with
          * KERN_NO_SPACE if the range is already in use, rather than silently

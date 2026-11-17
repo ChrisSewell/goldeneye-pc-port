@@ -6,6 +6,12 @@ function(target_architecture OUT_VAR)
     # Derive from the cross-compiler target, e.g. x86_64-w64-mingw32-gcc
     string(REGEX MATCH "^(i[3-6]86|x86_64|aarch64|arm|powerpc|wasm32)" _arch
            "${CMAKE_C_COMPILER_TARGET}")
+    # Apple cross builds (iOS) name the target through CMAKE_OSX_ARCHITECTURES.
+    if(_arch STREQUAL "" AND APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "^arm64$")
+      set(_arch "aarch64")
+    elseif(_arch STREQUAL "" AND APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "^x86_64$")
+      set(_arch "x86_64")
+    endif()
   elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "")
     # D515: a stripped native env (e.g. the build-pc.sh PowerShell re-exec
     # before it restored PROCESSOR_ARCHITECTURE) leaves

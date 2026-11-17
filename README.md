@@ -236,6 +236,22 @@ cd goldeneye-pc-port
 [`docs/building.md`](docs/building.md) has the full walkthrough for Windows,
 Linux and macOS.
 
+### iPhone (this fork)
+
+This fork adds an iPhone build, made from source on a Mac and installed on your
+own device. It needs Xcode, CMake, Ninja, XcodeGen and Python 3, and the same
+asset extraction from your US ROM (docs/building.md steps 2 and 4).
+
+```sh
+cp ios/Config/Local.xcconfig.example ios/Config/Local.xcconfig   # your team and bundle prefix
+tools_pc/ios_build.sh sim run        # simulator
+tools_pc/ios_build.sh device         # device build, then install with Xcode or devicectl
+DEVICE=<udid> tools_pc/ios_build.sh device data   # copy your ROM data to the device
+```
+
+Touch controls are on screen. The app contains the game's code and your ROM's
+data: keep it on your own devices and never share it.
+
 ## Documentation
 
 The docs are also published as a site:

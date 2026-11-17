@@ -128,8 +128,15 @@ void portAllUnlockedApply(void)
 #endif
 }
 
+#if defined(PLATFORM_IOS)
+void iosHostStart(void);   /* ios/App/AppShell.m */
+#endif
+
 int main(int argc, char **argv)
 {
+#if defined(PLATFORM_IOS)
+    iosHostStart();
+#endif
     sysSetArgs(argc, argv);
 
     if (sysArgCheck("--version")) { portPrintVersion(); return 0; }

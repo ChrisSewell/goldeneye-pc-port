@@ -1,0 +1,20 @@
+// Signing settings. Copy ios/Config/Local.xcconfig.example to
+// ios/Config/Local.xcconfig (ignored by git) and set your own team and bundle
+// prefix there, so they never get committed.
+//
+// DEVELOPMENT_TEAM: your Apple Developer team ID.
+// GE_BUNDLE_PREFIX: a reverse-DNS prefix you own. The bundle ID becomes
+// <prefix>.goldeneye.
+//
+// The simulator build works with the placeholders below and no team.
+DEVELOPMENT_TEAM =
+GE_BUNDLE_PREFIX = com.example
+
+// Where tools_pc/ios_build.sh put the libraries, per SDK.
+GE_BUILD = $(SRCROOT)/../build-ios
+GE_LIB_DIR[sdk=iphonesimulator*] = $(GE_BUILD)/iphonesimulator/lib
+GE_LIB_DIR[sdk=iphoneos*] = $(GE_BUILD)/iphoneos/lib
+GE_SDL_INCLUDE[sdk=iphonesimulator*] = $(GE_BUILD)/iphonesimulator/sdl/include/SDL2
+GE_SDL_INCLUDE[sdk=iphoneos*] = $(GE_BUILD)/iphoneos/sdl/include/SDL2
+
+#include? "Local.xcconfig"

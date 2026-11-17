@@ -156,6 +156,14 @@ static int rcRunConverter(const char *exePath, const char *rom, const char *out)
     free(wcmd);
     return rc;
 }
+#elif defined(PLATFORM_IOS)
+/* iOS apps cannot start other programs: the sidecars are made on a Mac
+ * (prepare-assets) and copied into the app's data folder with the ROM. */
+static int rcRunConverter(const char *exePath, const char *rom, const char *out)
+{
+    (void)exePath; (void)rom; (void)out;
+    return -1;
+}
 #else
 static int rcRunConverter(const char *exePath, const char *rom, const char *out)
 {

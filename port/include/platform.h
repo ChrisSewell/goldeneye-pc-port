@@ -18,6 +18,11 @@
   #include <TargetConditionals.h>
   #if TARGET_OS_IPHONE
     #define PLATFORM_IOS 1
+    /* iOS shares the Darwin paths (Mach-O, dyld, the 4 GiB window, the host
+     * thread that owns the SDL event queue). The few places where iOS
+     * differs (no shm_open in the sandbox, no CGL, no child processes) test
+     * PLATFORM_IOS first. */
+    #define PLATFORM_MACOS 1
   #else
     #define PLATFORM_MACOS 1
   #endif

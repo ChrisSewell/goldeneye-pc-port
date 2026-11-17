@@ -49,7 +49,14 @@
  * platform.h include): it is included from every TU, asm and C++ alike.
  */
 #ifndef PORT_ADDR_BASE
-#if defined(__APPLE__) && defined(__aarch64__)
+#if defined(__APPLE__) && defined(__aarch64__) && defined(__ENVIRONMENT_IOS_VERSION_MIN_REQUIRED__)
+/* iOS: the user address space ends far below 16 TiB, and everything from
+ * the end of the shared cache up to 448 GiB (0x7000000000) is reserved by
+ * the system (measured in the simulator: 0x2abccc000-0x7000000000, prot 0).
+ * The window sits at 448 GiB, the first free 4 GiB, which needs the
+ * extended-virtual-addressing entitlement on a device. */
+#define PORT_ADDR_BASE 0x7000000000ULL
+#elif defined(__APPLE__) && defined(__aarch64__)
 #define PORT_ADDR_BASE 0x100000000000ULL
 #else
 #define PORT_ADDR_BASE 0

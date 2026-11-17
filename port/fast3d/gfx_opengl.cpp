@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <SDL.h>
+#include "platform.h"
 
 #ifndef _LANGUAGE_C
 #define _LANGUAGE_C
@@ -68,6 +69,11 @@ static int gl_glsl_version = 130;
 static char gl_glsl_version_str[16] = "130";
 static GLenum gl_mirror_clamp = GL_MIRROR_CLAMP_TO_EDGE;
 static bool gl_es = false;
+/* The window's framebuffer. 0 everywhere but iOS, where SDL draws into a
+ * framebuffer object of its own (read at init), whose colour buffer is
+ * GL_COLOR_ATTACHMENT0 rather than GL_BACK. */
+static GLuint gl_screen_fbo = 0;
+static GLenum gl_screen_buf = GL_BACK;
 extern int gfx_rdp_affine;   /* D540: defined in gfx_pc.cpp */
 extern int gfx_fog_vertex;   /* D540: defined in gfx_pc.cpp */
 static bool gl_core_profile = false;
@@ -257,7 +263,7 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
     vs_len += sprintf(vs_buf + vs_len, "#version %s\n", gl_glsl_version_str);
 
     if (gl_es) {
-        append_line(vs_buf, &vs_len, "precision mediump float;");
+        append_line(vs_buf, &vs_len, "precision highp float;");
     }
 
     if (gl_glsl_version >= 130) {
@@ -343,7 +349,7 @@ static struct ShaderProgram* gfx_opengl_create_and_load_new_shader(uint64_t shad
     fs_len += sprintf(fs_buf + fs_len, "#version %s\n", gl_glsl_version_str);
 
     if (gl_es) {
-        append_line(fs_buf, &fs_len, "precision mediump float;");
+        append_line(fs_buf, &fs_len, "precision highp float;");
     }
 
     if (gl_glsl_version >= 130) {
@@ -1183,6 +1189,17 @@ static void gfx_opengl_init(void) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     framebuffers.resize(1); // for the default screen buffer
+
+#if defined(PLATFORM_IOS)
+    {
+        GLint bound = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
+        gl_screen_fbo = (GLuint)bound;
+        gl_screen_buf = bound ? GL_COLOR_ATTACHMENT0 : GL_BACK;
+        framebuffers[0].fbo = gl_screen_fbo;
+        sysLogPrintf(LOG_NOTE, "GL: screen framebuffer %u", (unsigned)gl_screen_fbo);
+    }
+#endif
 }
 
 static void gfx_opengl_on_resize(void) {
@@ -1257,8 +1274,8 @@ extern "C" bool gfx_opengl_dump_bound_fbo(uint32_t width, uint32_t height, const
     size_t n = (size_t)width * height * 3;
     uint8_t* pixels = (uint8_t*)malloc(n);
     if (!pixels) return false;
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glReadBuffer(GL_BACK);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, gl_screen_fbo);
+    glReadBuffer(gl_screen_buf);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glFinish();
     glReadPixels(0, 0, (GLsizei)width, (GLsizei)height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
@@ -1295,8 +1312,8 @@ static uint32_t s_islot_w, s_islot_h;
 static uint32_t s_islot_tw[GFX_INTERP_SLOTS], s_islot_th[GFX_INTERP_SLOTS];   /* D583: per-slot storage size */
 
 static void gfx_opengl_interp_restore_binding(void) {
-    glBindFramebuffer(GL_FRAMEBUFFER, current_framebuffer == 0 ? 0 : framebuffers[current_framebuffer].fbo);
-    glReadBuffer(GL_BACK);
+    glBindFramebuffer(GL_FRAMEBUFFER, current_framebuffer == 0 ? gl_screen_fbo : framebuffers[current_framebuffer].fbo);
+    glReadBuffer(gl_screen_buf);
     glEnable(GL_SCISSOR_TEST);
 }
 
@@ -1326,8 +1343,8 @@ extern "C" void gfx_opengl_interp_store(int slot, uint32_t width, uint32_t heigh
     s_islot_w = width;
     s_islot_h = height;
     glDisable(GL_SCISSOR_TEST);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glReadBuffer(GL_BACK);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, gl_screen_fbo);
+    glReadBuffer(gl_screen_buf);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, s_islot_fbo[slot]);
     glBlitFramebuffer(0, 0, (GLint)width, (GLint)height, 0, 0, (GLint)width, (GLint)height,
                       GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -1347,7 +1364,7 @@ extern "C" void gfx_opengl_interp_show(int slot) {
     glDisable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, s_islot_fbo[slot]);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gl_screen_fbo);
     /* The slot's own size: one stored before a window resize can still be pending (D583 ring). */
     glBlitFramebuffer(0, 0, (GLint)s_islot_tw[slot], (GLint)s_islot_th[slot], 0, 0, (GLint)s_islot_tw[slot], (GLint)s_islot_th[slot],
                       GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -1467,7 +1484,7 @@ bool gfx_opengl_start_draw_to_framebuffer(int fb_id, float noise_scale) {
          * framebuffer (GL name 0), not framebuffers[0].fbo (a generated but
          * attachment-less FBO -> incomplete -> nothing renders on a strict
          * GL implementation like Mesa/llvmpipe). */
-        glBindFramebuffer(GL_FRAMEBUFFER, fb_id == 0 ? 0 : fb.fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fb_id == 0 ? gl_screen_fbo : fb.fbo);
         current_framebuffer = fb_id;
         return true;
     } else {
@@ -1531,7 +1548,7 @@ void gfx_opengl_resolve_msaa_color_buffer(int fb_id_target, int fb_id_source) {
     glBlitFramebuffer(0, 0, fb_src.width, fb_src.height, 0, 0, fb_dst.width, fb_dst.height, GL_COLOR_BUFFER_BIT,
                       GL_NEAREST);
     /* current_framebuffer is an INDEX into framebuffers[], not a GL name; fb 0 is the window's default framebuffer (name 0). */
-    glBindFramebuffer(GL_FRAMEBUFFER, current_framebuffer == 0 ? 0 : framebuffers[current_framebuffer].fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, current_framebuffer == 0 ? gl_screen_fbo : framebuffers[current_framebuffer].fbo);
     glEnable(GL_SCISSOR_TEST);
 }
 
@@ -1588,16 +1605,16 @@ void gfx_opengl_copy_framebuffer(int fb_dst, int fb_src, int left, int top, bool
 
     if (fb_src == 0) {
         // GLES does not support GL_FRONT here
-        glReadBuffer((use_back || gl_es) ? GL_BACK : GL_FRONT);
+        glReadBuffer((use_back || gl_es) ? gl_screen_buf : GL_FRONT);
     } else {
         glReadBuffer(GL_COLOR_ATTACHMENT0);
     }
 
     glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, current_framebuffer == 0 ? 0 : framebuffers[current_framebuffer].fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, current_framebuffer == 0 ? gl_screen_fbo : framebuffers[current_framebuffer].fbo);
 
-    glReadBuffer(GL_BACK);
+    glReadBuffer(gl_screen_buf);
 
     glEnable(GL_SCISSOR_TEST);
 }

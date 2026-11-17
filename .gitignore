@@ -213,3 +213,12 @@ docs/media/*.mp4
 demos/
 demobatch/
 levelbench/
+
+# The iOS build (ios/, tools_pc/ios_build.sh): build output, XcodeGen's
+# project and generated files, your signing settings.
+/build-ios/
+/ios/*.xcodeproj
+/ios/App/Info.plist
+/ios/App/GoldenEye.entitlements
+/ios/Config/Local.xcconfig
+/ios/BundledData/
